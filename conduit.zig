@@ -13,6 +13,9 @@
 
 pub const config = @import("conduit/config.zig");
 
+pub const dtree = if (config.have_dtree) @import("dtree") else struct {};
+pub const almanac = if (config.have_almanac) @import("almanac") else struct {};
+
 pub const Mmio = @import("conduit/mmio.zig");
 
 pub const resource = @import("conduit/resource.zig");
