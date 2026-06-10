@@ -1,0 +1,17 @@
+.{
+    .name = .conduit,
+    .version = "0.1.0",
+    .fingerprint = 0xfdbb5281ac85f947,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .dtree = .{
+            .url = "git+https://github.com/Midstall/dtree#974e557da3c6426eaf2b3284c26ff8740163d954",
+            .hash = "dtree-0.1.0-76to8JyYAABD4L0wHIrSVlX-2X-5f72L7Odt0PvXrJeu",
+        },
+        .almanac = .{
+            .url = "git+https://github.com/Midstall/almanac#d2f7eab8fe7c1ec2d6e6e4d6363c60275fa363fd",
+            .hash = "almanac-0.1.0-9SzmcDvHBACa842eo4EKst73ItgkAcNlkpO45Ob4Kiib",
+        },
+    },
+    .paths = .{"."},
+}

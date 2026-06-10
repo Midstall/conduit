@@ -1,0 +1,77 @@
+//! NS16550A (8250-family) UART driver, over an `Mmio`. Ported from Weir's
+//! console/uart.zig, with the raw `@ptrFromInt` pokes replaced by `mmio` so the
+//! same source runs in Weir (M-mode pointer) and Ferrite (mapped region).
+//!
+//! Byte-wide register stride (reg-shift 0), as on QEMU virt and River.
+
+const Mmio = @import("../mmio.zig");
+const Serial = @import("../device/serial.zig");
+const match = @import("../match.zig");
+
+pub const matcher = match.Matcher{
+    .class = .uart,
+    .dt_compatible = &.{ "ns16550a", "ns16550", "snps,dw-apb-uart" },
+    .acpi_hid = &.{ "PNP0501", "PNP0500" },
+    .driver = "ns16550a",
+};
+
+pub const Ns16550a = struct {
+    mmio: Mmio,
+
+    const THR = 0; // transmit holding (write) / receive buffer (read)
+    const IER = 1; // interrupt enable
+    const FCR = 2; // FIFO control (write)
+    const LCR = 3; // line control
+    const MCR = 4; // modem control
+    const LSR = 5; // line status
+
+    const LSR_DR = 0x01; // data ready
+    const LSR_THRE = 0x20; // transmit holding register empty
+
+    pub fn init(self: Ns16550a) void {
+        self.mmio.write(u8, IER, 0x00); // no interrupts, we poll
+        self.mmio.write(u8, LCR, 0x03); // 8N1
+        self.mmio.write(u8, FCR, 0x07); // enable + clear RX/TX FIFOs
+        self.mmio.write(u8, MCR, 0x03); // DTR + RTS
+    }
+
+    pub fn txReady(self: Ns16550a) bool {
+        return self.mmio.read(u8, LSR) & LSR_THRE != 0;
+    }
+
+    pub fn rxReady(self: Ns16550a) bool {
+        return self.mmio.read(u8, LSR) & LSR_DR != 0;
+    }
+
+    pub fn putc(self: Ns16550a, c: u8) void {
+        while (!self.txReady()) {}
+        self.mmio.write(u8, THR, c);
+    }
+
+    /// Write bytes, translating LF to CRLF (firmware-console convention).
+    pub fn write(self: Ns16550a, s: []const u8) void {
+        for (s) |c| {
+            if (c == '\n') self.putc('\r');
+            self.putc(c);
+        }
+    }
+
+    pub fn read(self: Ns16550a, buf: []u8) usize {
+        var n: usize = 0;
+        while (n < buf.len and self.rxReady()) : (n += 1) {
+            buf[n] = self.mmio.read(u8, THR);
+        }
+        return n;
+    }
+
+    pub fn serial(self: *Ns16550a) Serial {
+        return Serial.from(self);
+    }
+};
+
+/// Bind a 16550 over `mmio` and initialize it.
+pub fn bind(mmio: Mmio) Ns16550a {
+    const u = Ns16550a{ .mmio = mmio };
+    u.init();
+    return u;
+}
