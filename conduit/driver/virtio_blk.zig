@@ -100,6 +100,11 @@ pub const Virtio = struct {
         self.mmio.write(u32, R_QUEUE_SEL, 0);
         if (self.mmio.read(u32, R_QUEUE_NUM_MAX) < QSIZE) return false;
         self.mmio.write(u32, R_QUEUE_NUM, QSIZE);
+
+        self.avail = .{ .flags = 0, .idx = 0, .ring = [_]u16{0} ** QSIZE, .used_event = 0 };
+        self.used = .{ .flags = 0, .idx = 0, .ring = [_]UsedElem{.{ .id = 0, .len = 0 }} ** QSIZE, .avail_event = 0 };
+        self.last_used = 0;
+
         self.setQueueAddr(R_QUEUE_DESC_LOW, @intFromPtr(&self.desc));
         self.setQueueAddr(R_QUEUE_DRIVER_LOW, @intFromPtr(&self.avail));
         self.setQueueAddr(R_QUEUE_DEVICE_LOW, @intFromPtr(&self.used));
