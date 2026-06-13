@@ -17,6 +17,7 @@ pub const matcher = match.Matcher{
 
 pub const Ns16550a = struct {
     mmio: Mmio,
+    divisor: u16 = 0,
 
     const THR = 0; // transmit holding (write) / receive buffer (read)
     const IER = 1; // interrupt enable
@@ -30,7 +31,15 @@ pub const Ns16550a = struct {
 
     pub fn init(self: Ns16550a) void {
         self.mmio.write(u8, IER, 0x00); // no interrupts, we poll
-        self.mmio.write(u8, LCR, 0x03); // 8N1
+
+        if (self.divisor != 0) {
+            // Program the baud: DLAB=1 exposes DLL/DLM at offsets 0/1.
+            self.mmio.write(u8, LCR, 0x83); // DLAB=1, 8N1
+            self.mmio.write(u8, THR, @truncate(self.divisor & 0xff)); // DLL
+            self.mmio.write(u8, IER, @truncate((self.divisor >> 8) & 0xff)); // DLM
+        }
+
+        self.mmio.write(u8, LCR, 0x03); // DLAB=0, 8N1 (latches the divisor)
         self.mmio.write(u8, FCR, 0x07); // enable + clear RX/TX FIFOs
         self.mmio.write(u8, MCR, 0x03); // DTR + RTS
     }
