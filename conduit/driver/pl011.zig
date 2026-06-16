@@ -7,7 +7,7 @@ const match = @import("../match.zig");
 
 pub const matcher = match.Matcher{
     .class = .uart,
-    .dt_compatible = &.{ "arm,pl011", "arm,primecell" },
+    .dt_compatible = &.{"arm,pl011"},
     .acpi_hid = &.{ "ARMH0011", "arm,sbsa-uart" },
     .driver = "pl011",
 };
