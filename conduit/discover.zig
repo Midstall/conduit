@@ -23,6 +23,8 @@ pub const Match = struct {
     resources: resource.List = .{},
     /// Name of the shipped driver that binds this match, if the matcher named one.
     driver: ?[]const u8 = null,
+    /// The node's numeric PCI identity, set only when the PCI backend produced it.
+    pci: ?backend.PciInfo = null,
 
     pub fn mmio(self: *const Match) ?resource.Resource.MmioRegion {
         return self.resources.mmio();
@@ -87,6 +89,7 @@ pub const Registry = struct {
                     .name = node.name,
                     .resources = list,
                     .driver = m.driver,
+                    .pci = node.pci,
                 };
             }
             return null;
@@ -99,7 +102,7 @@ pub const max_matches = 256;
 
 /// Comptime discovery. `be` is a pointer to a backend impl exposing
 /// `next`/`resources`/`reset` (e.g. `*DtBackend`). Returns a comptime slice of
-/// every matched device; the data is baked into the binary.
+/// every matched device, baked into the binary.
 pub const Builder = struct {
     pub fn scan(be: anytype, matchers: []const Matcher) []const Match {
         if (!@inComptime()) @compileError("Builder.scan is comptime-only; use Registry at runtime");
@@ -118,6 +121,7 @@ pub const Builder = struct {
                 .name = node.name,
                 .resources = list,
                 .driver = m.driver,
+                .pci = node.pci,
             };
             n += 1;
         }

@@ -18,13 +18,36 @@ const resource = @import("resource.zig");
 
 pub const Error = error{ Truncated, BadFormat, Unsupported, TooManyResources };
 
+/// A PCI device's bus geometry + config-space identity. Carried out-of-band on
+/// a `Node`/`Match` because PCI matches on NUMERIC vendor/device/class triples,
+/// which the string-based `ids`/`Matcher` model cannot represent. The PCI
+/// backend ALSO stuffs synthetic id strings into `ids` ("pci", a
+/// "pci:VVVV:DDDD" vendor:device id, and a "pci:class:CC" base-class id) so the
+/// ordinary string `Matcher`/`Registry` path still claims PCI nodes, and a
+/// consumer then refines on these exact numbers.
+pub const PciInfo = struct {
+    segment: u16 = 0,
+    bus: u8 = 0,
+    device: u8 = 0,
+    function: u8 = 0,
+    vendor_id: u16 = 0,
+    device_id: u16 = 0,
+    /// Base class code (PCI class register byte [23:16]), 0x03 = display.
+    class_code: u8 = 0,
+    subclass: u8 = 0,
+    prog_if: u8 = 0,
+    revision: u8 = 0,
+};
+
 /// A backend-neutral device node. `ids` are the node's identifiers (DT
-/// `compatible` strings and/or ACPI HID/CID); `token` is an opaque cursor the
-/// backend uses to re-find the node when lowering its resources.
+/// `compatible` strings and/or ACPI HID/CID). `token` is an opaque cursor the
+/// backend uses to re-find the node when lowering its resources. `pci` is set
+/// only by the PCI backend, carrying that node's numeric bus identity.
 pub const Node = struct {
     ids: match.IdList = .{},
     name: []const u8 = "",
     token: u64 = 0,
+    pci: ?PciInfo = null,
 };
 
 pub const Backend = struct {

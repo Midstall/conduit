@@ -27,15 +27,26 @@ pub const Class = match.Class;
 pub const Matcher = match.Matcher;
 pub const IdList = match.IdList;
 
+const builtin = @import("builtin");
+
 const backend_iface = @import("conduit/backend.zig");
 pub const Backend = backend_iface.Backend;
+
+/// The PCI backend builds only for the two OS targets it has an impl for (Linux
+/// /sys and UEFI EFI_PCI_IO). On any other target (e.g. the freestanding
+/// `conduit_bare` module) it stays an empty struct so the host-OS code never
+/// compiles, even with `-Dpci` on.
+const pci_supported = builtin.os.tag == .linux or builtin.os.tag == .uefi;
+
 pub const backend = struct {
     pub const Backend = backend_iface.Backend;
     pub const Node = backend_iface.Node;
+    pub const PciInfo = backend_iface.PciInfo;
     pub const Error = backend_iface.Error;
     pub const fromImpl = backend_iface.fromImpl;
     pub const dtree = if (config.have_dtree) @import("conduit/backend/dtree.zig") else struct {};
     pub const almanac = if (config.have_almanac) @import("conduit/backend/almanac.zig") else struct {};
+    pub const pci = if (config.have_pci and pci_supported) @import("conduit/backend/pci.zig") else struct {};
 };
 
 pub const discover = @import("conduit/discover.zig");
@@ -55,8 +66,10 @@ pub const device = struct {
     pub const Intc = @import("conduit/device/intc.zig");
 };
 
-/// Shipped driver implementations. Each exports `bind(Mmio, ...)` and a
-/// `matcher`.
+/// Shipped driver implementations. Each exports `bind(Mmio, ...)`, and the
+/// DT/ACPI-discoverable ones also export a `matcher`. Statically-mapped devices
+/// (bound directly over an `Mmio`, e.g. the Albion secure-element blocks) have
+/// no matcher.
 pub const driver = struct {
     pub const ns16550a = @import("conduit/driver/ns16550a.zig");
     pub const pl011 = @import("conduit/driver/pl011.zig");
@@ -69,8 +82,22 @@ pub const driver = struct {
     pub const gicv3 = @import("conduit/driver/gicv3.zig");
     pub const sdhci = @import("conduit/driver/sdhci.zig");
     pub const virtio_blk = @import("conduit/driver/virtio_blk.zig");
+    pub const virtio_gpu = @import("conduit/driver/virtio_gpu.zig");
     pub const goldfish_rtc = @import("conduit/driver/goldfish_rtc.zig");
     pub const pl031 = @import("conduit/driver/pl031.zig");
+    pub const albion_ftpm = @import("conduit/driver/albion_ftpm.zig");
+    pub const albion_pcr = @import("conduit/driver/albion_pcr.zig");
+    pub const albion_ed25519 = @import("conduit/driver/albion_ed25519.zig");
+    pub const albion_integrity = @import("conduit/driver/albion_integrity.zig");
+    pub const albion_gpc = @import("conduit/driver/albion_gpc.zig");
+    pub const albion_rmm = @import("conduit/driver/albion_rmm.zig");
+    pub const albion_measure = @import("conduit/driver/albion_measure.zig");
+    pub const albion_sealver = @import("conduit/driver/albion_sealver.zig");
+    pub const albion_covi = @import("conduit/driver/albion_covi.zig");
+    pub const albion_covi_inject = @import("conduit/driver/albion_covi_inject.zig");
+    pub const albion_ed25519_sign = @import("conduit/driver/albion_ed25519_sign.zig");
+    pub const albion_rotkdf = @import("conduit/driver/albion_rotkdf.zig");
+    pub const harbor_trng = @import("conduit/driver/harbor_trng.zig");
 };
 
 /// A matcher table covering every shipped driver. A consumer can pass this
@@ -101,11 +128,20 @@ test {
     _ = discover;
     inline for (.{ device.Serial, device.Block, device.Gpio, device.I2c, device.Spi, device.Rtc, device.Intc }) |d| _ = d;
     inline for (.{
-        driver.ns16550a,   driver.pl011, driver.harbor_gpio, driver.harbor_i2c,
-        driver.harbor_spi, driver.plic,  driver.clint,       driver.gicv2,
-        driver.gicv3,      driver.sdhci, driver.virtio_blk,  driver.goldfish_rtc,
-        driver.pl031,
+        driver.ns16550a,           driver.pl011,               driver.harbor_gpio,      driver.harbor_i2c,
+        driver.harbor_spi,         driver.plic,                driver.clint,            driver.gicv2,
+        driver.gicv3,              driver.sdhci,               driver.virtio_blk,       driver.virtio_gpu,
+        driver.goldfish_rtc,       driver.pl031,               driver.albion_ftpm,      driver.albion_pcr,
+        driver.harbor_trng,        driver.albion_ed25519,      driver.albion_integrity, driver.albion_gpc,
+        driver.albion_rmm,         driver.albion_measure,      driver.albion_sealver,   driver.albion_covi,
+        driver.albion_covi_inject, driver.albion_ed25519_sign, driver.albion_rotkdf,
     }) |d| _ = d;
     if (config.have_dtree) _ = backend.dtree;
     if (config.have_almanac) _ = backend.almanac;
+    if (config.have_pci and pci_supported) _ = backend.pci;
 }
+
+/// A matcher that claims every PCI device (any vendor/class), so the string
+/// `Registry`/`Builder` path enumerates PCI nodes, and a consumer then refines on
+/// `Match.pci` (the numeric vendor/device/class). Pair it with `Class.pci`.
+pub const pci_matcher = Matcher{ .class = .pci, .dt_compatible = &.{"pci"} };
