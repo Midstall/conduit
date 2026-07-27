@@ -9,7 +9,7 @@ const std = @import("std");
 /// named separately: `.uart` -> `device.Serial`, `.block` -> `device.Block`,
 /// `.gpio` -> `device.Gpio`, `.i2c` -> `device.I2c`, `.spi` -> `device.Spi`,
 /// `.rtc` -> `device.Rtc`, `.intc` -> `device.Intc`.
-pub const Class = enum { uart, block, gpio, i2c, spi, rtc, intc, pci, timer, memory, flash, sdram, tpm };
+pub const Class = enum { uart, block, display, gpio, i2c, spi, rtc, intc, pci, timer, memory, flash, sdram, tpm };
 
 /// A device identifier: a DT `compatible` string or an ACPI `_HID`/`_CID`.
 pub const Id = []const u8;
