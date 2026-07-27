@@ -32,11 +32,9 @@ const builtin = @import("builtin");
 const backend_iface = @import("conduit/backend.zig");
 pub const Backend = backend_iface.Backend;
 
-/// The PCI backend builds only for the two OS targets it has an impl for (Linux
-/// /sys and UEFI EFI_PCI_IO). On any other target (e.g. the freestanding
-/// `conduit_bare` module) it stays an empty struct so the host-OS code never
-/// compiles, even with `-Dpci` on.
-const pci_supported = builtin.os.tag == .linux or builtin.os.tag == .uefi;
+/// The PCI backend builds for Linux, UEFI, and freestanding targets.
+/// On any other target it stays an empty struct.
+const pci_supported = builtin.os.tag == .linux or builtin.os.tag == .uefi or builtin.os.tag == .freestanding;
 
 pub const backend = struct {
     pub const Backend = backend_iface.Backend;
@@ -82,6 +80,7 @@ pub const driver = struct {
     pub const gicv3 = @import("conduit/driver/gicv3.zig");
     pub const sdhci = @import("conduit/driver/sdhci.zig");
     pub const virtio_blk = @import("conduit/driver/virtio_blk.zig");
+    pub const virtio_pci = @import("conduit/driver/virtio_pci.zig");
     pub const virtio_gpu = @import("conduit/driver/virtio_gpu.zig");
     pub const goldfish_rtc = @import("conduit/driver/goldfish_rtc.zig");
     pub const pl031 = @import("conduit/driver/pl031.zig");
@@ -114,6 +113,7 @@ pub const all_matchers = [_]Matcher{
     driver.gicv3.matcher,
     driver.sdhci.matcher,
     driver.virtio_blk.matcher,
+    driver.virtio_gpu.matcher,
     driver.goldfish_rtc.matcher,
     driver.pl031.matcher,
 };
@@ -128,13 +128,13 @@ test {
     _ = discover;
     inline for (.{ device.Serial, device.Block, device.Gpio, device.I2c, device.Spi, device.Rtc, device.Intc }) |d| _ = d;
     inline for (.{
-        driver.ns16550a,           driver.pl011,               driver.harbor_gpio,      driver.harbor_i2c,
-        driver.harbor_spi,         driver.plic,                driver.clint,            driver.gicv2,
-        driver.gicv3,              driver.sdhci,               driver.virtio_blk,       driver.virtio_gpu,
-        driver.goldfish_rtc,       driver.pl031,               driver.albion_ftpm,      driver.albion_pcr,
-        driver.harbor_trng,        driver.albion_ed25519,      driver.albion_integrity, driver.albion_gpc,
-        driver.albion_rmm,         driver.albion_measure,      driver.albion_sealver,   driver.albion_covi,
-        driver.albion_covi_inject, driver.albion_ed25519_sign, driver.albion_rotkdf,
+        driver.ns16550a,    driver.pl011,              driver.harbor_gpio,         driver.harbor_i2c,
+        driver.harbor_spi,  driver.plic,               driver.clint,               driver.gicv2,
+        driver.gicv3,       driver.sdhci,              driver.virtio_blk,          driver.virtio_pci,
+        driver.virtio_gpu,  driver.goldfish_rtc,       driver.pl031,               driver.albion_ftpm,
+        driver.albion_pcr,  driver.harbor_trng,        driver.albion_ed25519,      driver.albion_integrity,
+        driver.albion_gpc,  driver.albion_rmm,         driver.albion_measure,      driver.albion_sealver,
+        driver.albion_covi, driver.albion_covi_inject, driver.albion_ed25519_sign, driver.albion_rotkdf,
     }) |d| _ = d;
     if (config.have_dtree) _ = backend.dtree;
     if (config.have_almanac) _ = backend.almanac;
