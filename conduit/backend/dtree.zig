@@ -133,6 +133,17 @@ pub const DtBackend = struct {
             const p = n.prop;
             if (std.mem.eql(u8, p.name, "compatible")) {
                 splitCompatible(p.value, ids);
+            } else if (std.mem.eql(u8, p.name, "device_type")) {
+                // Nodes like `/memory` carry no `compatible`; expose their
+                // `device_type` string (e.g. "memory") as an id so a Matcher can
+                // claim them by class.
+                var dt = p.value;
+                if (dt.len > 0 and dt[dt.len - 1] == 0) dt = dt[0 .. dt.len - 1];
+                if (dt.len > 0) ids.append(dt);
+            } else if (std.mem.eql(u8, p.name, "clock-frequency")) {
+                // A device's own clock rate (e.g. the UART baud clock) - lowered
+                // into a Clock resource so consumers read it off the match.
+                if (beCell(p.value)) |hz| try out.append(.{ .clock = .{ .freq_hz = hz } });
             } else if (std.mem.eql(u8, p.name, "#address-cells")) {
                 child.addr = beCell(p.value) orelse child.addr;
             } else if (std.mem.eql(u8, p.name, "#size-cells")) {

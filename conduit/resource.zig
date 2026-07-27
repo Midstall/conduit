@@ -55,6 +55,15 @@ pub const List = struct {
         return self.mmioAt(0);
     }
 
+    /// First Clock resource, if any (e.g. a device's own clock-frequency).
+    pub fn clock(self: *const List) ?Resource.Clock {
+        for (self.slice()) |r| switch (r) {
+            .clock => |c| return c,
+            else => {},
+        };
+        return null;
+    }
+
     /// Nth MMIO window (0-based), if present. Devices like a GICv2 expose more
     /// than one (distributor + CPU interface).
     pub fn mmioAt(self: *const List, n: usize) ?Resource.MmioRegion {

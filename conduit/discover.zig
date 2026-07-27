@@ -30,6 +30,10 @@ pub const Match = struct {
         return self.resources.mmio();
     }
 
+    pub fn clock(self: *const Match) ?resource.Resource.Clock {
+        return self.resources.clock();
+    }
+
     pub fn mmioAt(self: *const Match, n: usize) ?resource.Resource.MmioRegion {
         return self.resources.mmioAt(n);
     }
