@@ -1,7 +1,7 @@
 //! RISC-V CLINT (Core-Local Interruptor) driver, over an `Mmio`. Ported from
 //! Weir's arch/riscv/clint.zig. CLINT provides the machine timer and inter-hart
-//! software interrupts (IPIs); it is NOT a claim/complete interrupt controller
-//! (that is the PLIC), so it is a standalone driver rather than an `Intc`.
+//! software interrupts (IPIs). CLINT does not claim or complete interrupts.
+//! The PLIC does that. So this is a standalone driver, not an `Intc`.
 //!   MSIP   0x0000 (u32 per hart)
 //!   MTIMECMP 0x4000 (u64 per hart)
 //!   MTIME  0xbff8 (u64 global)
@@ -27,7 +27,7 @@ pub const Clint = struct {
         return self.mmio.read(u64, MTIME);
     }
 
-    /// Program `hart`'s timer compare; a timer interrupt fires once time() >= value.
+    /// Program `hart`'s timer compare. A timer interrupt fires once time() >= value.
     pub fn setTimecmp(self: Clint, hart: usize, value: u64) void {
         self.mmio.write(u64, MTIMECMP + hart * 8, value);
     }

@@ -5,8 +5,8 @@
 
 const std = @import("std");
 
-/// The discovery/matching key. The contract type that drives each class is
-/// named separately: `.uart` -> `device.Serial`, `.block` -> `device.Block`,
+/// The discovery/matching key. A separate contract type drives each class:
+/// `.uart` -> `device.Serial`, `.block` -> `device.Block`,
 /// `.gpio` -> `device.Gpio`, `.i2c` -> `device.I2c`, `.spi` -> `device.Spi`,
 /// `.rtc` -> `device.Rtc`, `.intc` -> `device.Intc`.
 pub const Class = enum { uart, block, gpio, i2c, spi, rtc, intc, pci, timer, memory, flash, sdram, tpm };
@@ -15,7 +15,7 @@ pub const Class = enum { uart, block, gpio, i2c, spi, rtc, intc, pci, timer, mem
 pub const Id = []const u8;
 
 /// Upper bound on identifiers carried by a single node (a `compatible` list is
-/// rarely longer; ACPI gives a HID plus a CID).
+/// rarely longer, and ACPI gives a HID plus a CID).
 pub const max_ids = 8;
 
 /// A fixed-capacity, allocator-free list of a node's identifiers.
@@ -41,7 +41,7 @@ pub const Matcher = struct {
     /// Name of the shipped driver that binds this match, if any.
     driver: ?[]const u8 = null,
 
-    /// True if any of the node's ids is listed by this matcher.
+    /// True if this matcher lists any of the node's ids.
     pub fn matches(self: Matcher, ids: []const Id) bool {
         for (ids) |id| {
             for (self.dt_compatible) |c| if (std.mem.eql(u8, id, c)) return true;

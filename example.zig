@@ -1,7 +1,7 @@
-//! A tiny demonstration of conduit's two discovery entry points over a real
-//! QEMU riscv-virt device tree: a comptime `Builder` bake and a runtime
-//! `Registry`, both driven by the shipped driver matcher table. Discovery only;
-//! it does not poke real MMIO (the bases printed are physical addresses).
+//! A small demonstration of conduit's two discovery entry points over a real
+//! QEMU riscv-virt device tree. It shows a comptime `Builder` bake and a runtime
+//! `Registry`. The shipped driver matcher table drives both. This does discovery
+//! only. It does not poke real MMIO. The printed bases are physical addresses.
 
 const std = @import("std");
 const conduit = @import("conduit");
@@ -32,7 +32,7 @@ pub fn main(init: std.process.Init) !void {
         try w.writeByte('\n');
     }
 
-    // Runtime: the same matcher table over a live Registry, iterating every UART.
+    // Runtime: run the same matcher table over a live Registry. Iterate every UART.
     var reader = try dtree.Reader.initBuffer(&blob);
     var be = conduit.backend.dtree.DtBackend.init(&reader);
     const reg = conduit.Registry.init(be.any(), &conduit.all_matchers);

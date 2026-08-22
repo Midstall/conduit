@@ -3,8 +3,10 @@
 const Spi = @This();
 
 ctx: ?*anyopaque,
-/// Full-duplex transfer: clock out `tx` while clocking in to `rd`. Shorter of
-/// the two bounds the exchange; the longer side pads/ignores.
+/// Full-duplex transfer: clock out `tx` while clocking in to `rd`. The LONGER
+/// of the two bounds the exchange, so a caller reads more than it writes by
+/// passing a short `tx`. Past the end of `tx` the driver clocks its idle byte,
+/// and it fills `rd` only within `rd`'s bounds.
 transfer_fn: *const fn (ctx: ?*anyopaque, tx: []const u8, rd: []u8) void,
 
 pub fn transfer(self: Spi, tx: []const u8, rd: []u8) void {

@@ -16,8 +16,8 @@ const Mmio = @This();
 pub const Width = enum { byte, half, word, dword };
 
 ctx: ?*anyopaque,
-/// Bus/virtual base the ctx understands. Informational for most impls; the
-/// `direct` impl carries the base inside `ctx` so register offsets resolve
+/// Bus/virtual base the ctx understands. It is informational for most impls.
+/// The `direct` impl carries the base inside `ctx`, so register offsets resolve
 /// without a separate allocation.
 base: u64,
 read_fn: *const fn (ctx: ?*anyopaque, off: usize, width: Width) u64,
@@ -31,7 +31,7 @@ pub inline fn write(self: Mmio, comptime T: type, off: usize, v: T) void {
     self.write_fn(self.ctx, off, widthOf(T), v);
 }
 
-/// An identity-mapped, volatile-pointer accessor. The base is stashed in `ctx`
+/// An identity-mapped, volatile-pointer accessor. It stashes the base in `ctx`,
 /// so reads/writes resolve to `base + off` with zero overhead. This is Weir's
 /// M-mode path.
 pub fn direct(base: u64) Mmio {

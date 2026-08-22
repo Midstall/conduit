@@ -1,8 +1,8 @@
-//! Albion RoT-KDF driver, over an `Mmio`. Derives keys from the FUSED ROOT in
-//! hardware: the firmware writes only a 256-bit `info` domain label and reads the
-//! 512-bit derived key (`OKM = HKDF-SHA512(root, info)`), so the raw root never
-//! transits software. The attestation firmware derives its sealing key (and key
-//! seeds) here, then uses them with the seal engine.
+//! Albion RoT-KDF driver, over an `Mmio`. It derives keys from the FUSED ROOT in
+//! hardware. The firmware writes only a 256-bit `info` domain label. It reads the
+//! 512-bit derived key (`OKM = HKDF-SHA512(root, info)`). So the raw root never
+//! transits software. The attestation firmware derives its sealing key and key
+//! seeds here. It then uses them with the seal engine.
 //!
 //! Register map (8-byte strided, matches lib/src/crypto/rot_kdf_mmio.dart):
 //!   0x00 CTRL (W bit0 START)  0x08 STATUS (R: bit0 busy, bit1 done)
@@ -27,7 +27,7 @@ pub const RotKdf = struct {
             self.mmio.write(u32, INFO + 8 * i, w);
         }
         self.mmio.write(u32, CTRL, 1); // START
-        while (self.mmio.read(u32, STATUS) & 0x1 != 0) {} // wait for !busy
+        while (self.mmio.read(u32, STATUS) & 0x1 != 0) {} // wait until not busy
         i = 0;
         while (i < 16) : (i += 1) {
             const w = self.mmio.read(u32, OKM + 8 * i);

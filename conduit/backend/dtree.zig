@@ -7,10 +7,10 @@
 //!
 //! Interrupt decoding is controller-aware. A one-time pre-pass builds a map from
 //! interrupt-controller phandle to its `#interrupt-cells` and specifier format
-//! (ARM GIC `<type irq flags>` vs generic `<irq ...>`). A device's interrupts
-//! are then decoded against its effective `interrupt-parent` (declared on the
-//! node or inherited from an ancestor), or, for `interrupts-extended`, against
-//! the controller named in each entry.
+//! (ARM GIC `<type irq flags>` vs generic `<irq ...>`). conduit then decodes a
+//! device's interrupts against its effective `interrupt-parent` (declared on the
+//! node or inherited from an ancestor). For `interrupts-extended`, it decodes
+//! against the controller that each entry names.
 //!
 //! Properties of a node precede its subnodes in the DTB stream, and dtree
 //! reports a node's own props at one depth below the node's begin. We exploit
@@ -32,7 +32,7 @@ const Domain = enum { generic, arm_gic };
 const Controller = struct { phandle: u32, cells: u32, domain: Domain };
 
 /// Values inherited down the tree. `addr`/`size` are the cells a node declares
-/// for its children's `reg`; `intr_parent` is the effective interrupt-parent;
+/// for its children's `reg`. `intr_parent` is the effective interrupt-parent.
 /// `ranges`/`parent_addr` describe how this node (a bus) translates its child
 /// addresses up into its parent's address space.
 const Inherited = struct {
@@ -89,7 +89,7 @@ pub const DtBackend = struct {
                     if (self.depth > 0) self.depth -= 1;
                     continue;
                 },
-                .prop => continue, // stray; node props are consumed in the begin arm
+                .prop => continue, // a stray token: the begin arm consumes a node's props
                 .begin => |b| {
                     self.cur = if (self.depth > 0) self.stack[self.depth - 1] else Inherited{};
 
@@ -134,15 +134,15 @@ pub const DtBackend = struct {
             if (std.mem.eql(u8, p.name, "compatible")) {
                 splitCompatible(p.value, ids);
             } else if (std.mem.eql(u8, p.name, "device_type")) {
-                // Nodes like `/memory` carry no `compatible`; expose their
-                // `device_type` string (e.g. "memory") as an id so a Matcher can
-                // claim them by class.
+                // Nodes like `/memory` carry no `compatible`. Expose their
+                // `device_type` string (e.g. "memory") as an id. A Matcher then
+                // claims them by class.
                 var dt = p.value;
                 if (dt.len > 0 and dt[dt.len - 1] == 0) dt = dt[0 .. dt.len - 1];
                 if (dt.len > 0) ids.append(dt);
             } else if (std.mem.eql(u8, p.name, "clock-frequency")) {
-                // A device's own clock rate (e.g. the UART baud clock) - lowered
-                // into a Clock resource so consumers read it off the match.
+                // A device's own clock rate (e.g. the UART baud clock). Lower it
+                // into a Clock resource so a consumer reads it off the match.
                 if (beCell(p.value)) |hz| try out.append(.{ .clock = .{ .freq_hz = hz } });
             } else if (std.mem.eql(u8, p.name, "#address-cells")) {
                 child.addr = beCell(p.value) orelse child.addr;
@@ -158,14 +158,20 @@ pub const DtBackend = struct {
                 raw_interrupts = p.value;
             } else if (std.mem.eql(u8, p.name, "interrupts-extended")) {
                 raw_extended = p.value;
+            } else if (p.value.len == 0) {
+                // An empty-valued property is a DT boolean (e.g. `harbor,dma;`).
+                // Lower it as a named capability flag a consumer can test. The
+                // valued and structural props are all handled above, so only real
+                // boolean flags reach here.
+                try out.append(.{ .flag = p.name });
             }
         }
 
         const eff_parent: ?u32 = if (own_parent) |x| x else self.cur.intr_parent;
         child.intr_parent = eff_parent;
 
-        // interrupts-extended is self-describing (each entry names its controller)
-        // and supersedes interrupts; otherwise decode against the effective parent.
+        // interrupts-extended is self-describing. Each entry names its controller,
+        // and it supersedes interrupts. Otherwise decode against the effective parent.
         if (raw_extended) |v| {
             try self.lowerExtended(v, out);
         } else if (raw_interrupts) |v| {
@@ -174,8 +180,8 @@ pub const DtBackend = struct {
     }
 
     /// reg is a list of (address, size) records, each `addr_cells`/`size_cells`
-    /// u32 cells wide, big-endian. Each base is translated from the parent bus's
-    /// child-address space up to CPU space via the ancestor `ranges` chain.
+    /// u32 cells wide, big-endian. The ancestor `ranges` chain translates each
+    /// base from the parent bus's child-address space up to CPU space.
     fn lowerReg(self: *const DtBackend, value: []const u8, out: *resource.List) backend.Error!void {
         const ca = self.cur.addr;
         const cs = self.cur.size;
@@ -295,8 +301,8 @@ fn decodeSpecifier(ctrl: Controller, bytes: []const u8, out: *resource.List) bac
             const kind = std.mem.readInt(u32, bytes[0..4], .big);
             const irq = std.mem.readInt(u32, bytes[4..8], .big);
             const flags = std.mem.readInt(u32, bytes[8..12], .big);
-            // GIC: type 0 = SPI (+32), type 1 = PPI (+16); flags low nibble is
-            // the trigger/polarity (1 edge-rising, 2 edge-falling, 4 level-high,
+            // GIC: type 0 = SPI (+32), type 1 = PPI (+16). The flags low nibble
+            // is the trigger/polarity (1 edge-rising, 2 edge-falling, 4 level-high,
             // 8 level-low).
             const number: u32 = switch (kind) {
                 0 => irq + 32,
@@ -330,7 +336,7 @@ fn beCell(value: []const u8) ?u32 {
 
 /// Apply one bus's `ranges` to translate `addr` from the bus's child-address
 /// space into its parent's. A null `ranges` (absent) or empty `ranges` (1:1) is
-/// identity; an address outside every window passes through unchanged.
+/// identity. An address outside every window passes through unchanged.
 fn applyRanges(bus: Inherited, addr: u64) u64 {
     const raw = bus.ranges orelse return addr;
     if (raw.len == 0) return addr; // empty ranges: identity
@@ -351,8 +357,8 @@ fn applyRanges(bus: Inherited, addr: u64) u64 {
     return addr; // no matching window: passthrough
 }
 
-/// Read up to `count` big-endian u32 cells into a u64 (low `count` cells; if
-/// `count > 2`, the most-significant cells beyond 64 bits are dropped).
+/// Read up to `count` big-endian u32 cells into a u64. It keeps the low `count`
+/// cells. If `count > 2`, it drops the most-significant cells beyond 64 bits.
 fn readCells(value: []const u8, count: u32) u64 {
     var v: u64 = 0;
     var i: u32 = 0;
@@ -403,7 +409,7 @@ test "ranges translation walks the bus chain" {
     be.depth = 2;
     // root (stack[0]): no ranges -> identity at the top.
     be.stack[0] = .{ .addr = 2, .size = 2, .ranges = null };
-    // intermediate bus (stack[1]): child cells 1, parent cells 2, size 1; maps
+    // intermediate bus (stack[1]): child cells 1, parent cells 2, size 1. It maps
     // child window [0x0, 0x1000) onto parent base 0x4000_0000.
     var r: [16]u8 = undefined;
     std.mem.writeInt(u32, r[0..4], 0x0, .big); // child base (1 cell)

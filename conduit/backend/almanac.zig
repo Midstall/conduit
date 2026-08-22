@@ -2,13 +2,14 @@
 //! `backend` contract so the Registry/Builder treat them exactly like the
 //! device-tree backend:
 //!
-//!   * `Static(M)`: over already-discovered `almanac.Tables`. Synthesizes a node
-//!     per recognized firmware table - SPCR (serial console), MCFG (PCI ECAM),
-//!     and MADT interrupt controllers (I/O APIC, GIC distributor/redistributor).
-//!     No allocator; usable very early.
+//!   * `Static(M)`: over already-discovered `almanac.Tables`. It makes one node
+//!     per recognized firmware table. It handles SPCR (serial console), MCFG
+//!     (PCI ECAM), and MADT interrupt controllers (I/O APIC, GIC distributor and
+//!     redistributor). It needs no allocator. It runs very early.
 //!   * `Full`: over an `almanac.Interpreter`, walking the AML namespace's
-//!     `Device`s for `_HID`/`_CID` and lowering `_CRS` into resources. Needs the
-//!     interpreter's arena; runtime only, but sees every enumerable device.
+//!     `Device`s for `_HID`/`_CID` and lowering `_CRS` into resources. It needs
+//!     the interpreter's arena. It runs at runtime only, but it sees every
+//!     enumerable device.
 //!
 //! Both reuse DT-style id strings (e.g. "ns16550a", "pci-host-ecam-generic") so
 //! one matcher table covers both backends and the device-tree backend.
@@ -203,7 +204,7 @@ pub const Full = struct {
     pub fn resources(self: *Full, node: backend.Node, out: *resource.List) backend.Error!void {
         _ = node;
         const dev = self.cur orelse return;
-        var walk = dev.crs() catch return; // no _CRS -> no resources
+        var walk = dev.crs() catch return; // a missing _CRS means no resources
         defer walk.deinit();
         var it = walk.iterator();
         while (it.next() catch return error.BadFormat) |r| try lowerCrs(r, out);

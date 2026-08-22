@@ -1,9 +1,9 @@
 //! ARM GICv3 driver, implementing the `Intc` contract. The Distributor (GICD)
-//! and per-CPU Redistributor (GICR) are MMIO; the CPU interface (claim/EOI,
-//! priority mask, group enable) is the `ICC_*` system-register file, reached
-//! with MRS/MSR on aarch64. Those accesses are comptime-gated on the target
-//! arch so conduit still builds and unit-tests on any host (the MMIO paths work
-//! everywhere; claim/complete are inert off aarch64).
+//! and per-CPU Redistributor (GICR) are MMIO. The CPU interface (claim/EOI,
+//! priority mask, group enable) is the `ICC_*` system-register file. Code reaches
+//! it with MRS/MSR on aarch64. A comptime check gates those accesses on the target
+//! arch, so conduit still builds and unit-tests on any host. The MMIO paths work
+//! everywhere. claim and complete are inert off aarch64.
 
 const builtin = @import("builtin");
 const Mmio = @import("../mmio.zig");
@@ -18,7 +18,7 @@ pub const matcher = match.Matcher{
 
 pub const Gicv3 = struct {
     dist: Mmio, // GICD
-    redist: Mmio, // GICR (RD_base; the SGI frame is 0x10000 above it)
+    redist: Mmio, // GICR RD_base. The SGI frame sits 0x10000 above it.
 
     const GICD_CTLR = 0x000;
     const GICD_ISENABLER = 0x100;

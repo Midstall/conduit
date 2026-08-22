@@ -1,5 +1,6 @@
-//! Proves the Ferrite extension point: a hand-rolled backend (no dtree, no
-//! almanac) drives the same Registry and device-class machinery.
+//! This test proves the Ferrite extension point. A hand-written backend drives
+//! the same Registry and device-class machinery. It uses no dtree and no
+//! almanac.
 
 const std = @import("std");
 const backend = @import("conduit").backend;
@@ -9,8 +10,8 @@ const discover = @import("conduit").discover;
 
 const FakeDevice = struct { ids: []const []const u8, base: u64 };
 
-/// A backend over an in-memory device list, standing in for a host's own
-/// discovery model (e.g. Ferrite's kernel/9P probe).
+/// A backend over an in-memory device list. It stands in for a host's own
+/// discovery model, for example Ferrite's kernel or 9P probe.
 const FakeBackend = struct {
     devices: []const FakeDevice,
     i: usize = 0,

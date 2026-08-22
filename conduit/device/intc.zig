@@ -1,6 +1,6 @@
-//! The interrupt-controller device-class contract. The seam that lets an `irq`
-//! resource be acted on (PLIC/CLINT/GIC). On Ferrite userspace, the normalized
-//! IRQ number is fed to SYS_IRQ_CREATE instead; this contract is for in-binary
+//! The interrupt-controller device-class contract. This seam acts on an `irq`
+//! resource (PLIC/CLINT/GIC). On Ferrite userspace, conduit feeds the normalized
+//! IRQ number to SYS_IRQ_CREATE instead. This contract is for in-binary
 //! controllers (Weir, or a Ferrite kernel driver).
 
 const Intc = @This();

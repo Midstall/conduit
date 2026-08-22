@@ -1,5 +1,6 @@
-//! ACPI static-table discovery test. Builds a real RSDP/XSDT/SPCR/MCFG/MADT set
-//! with almanac's producer API, then discovers through conduit's Static backend.
+//! This test discovers ACPI static tables. It builds a real
+//! RSDP/XSDT/SPCR/MCFG/MADT set with almanac's producer API. Then it discovers
+//! through conduit's Static backend.
 
 const std = @import("std");
 const almanac = @import("almanac");

@@ -1,7 +1,7 @@
-//! Albion Ed25519-sign offload driver, over an `Mmio`. Drives the hardened
-//! hardware sign engine so the RMM attestation firmware produces a realm
-//! signature with the side-channel-protected secret scalar, instead of a
-//! software Ed25519 sign. Operands are 32-byte LITTLE-ENDIAN, and word i (8-byte
+//! Albion Ed25519-sign offload driver, over an `Mmio`. It drives the hardened
+//! hardware sign engine. The RMM attestation firmware uses it to produce a realm
+//! signature with the side-channel-protected secret scalar. This replaces a
+//! software Ed25519 sign. Operands are 32-byte LITTLE-ENDIAN. Word i (8-byte
 //! strided) carries bytes[4*i..4*i+4].
 //!
 //! Register map (matches lib/src/crypto/ed25519_sign_mmio.dart):
@@ -40,9 +40,9 @@ pub const Ed25519Sign = struct {
         }
     }
 
-    /// Sign a 32-byte message with the realm key, returning `(R, S)` (the 64-byte
-    /// Ed25519 signature is `R || S`). `seed` is the private seed, `pubkey` the
-    /// public-key encoding, `z` fresh hedge entropy.
+    /// Sign a 32-byte message with the realm key. This returns `(R, S)`, and the
+    /// 64-byte Ed25519 signature is `R || S`. `seed` is the private seed. `pubkey`
+    /// is the public-key encoding. `z` is fresh hedge entropy.
     pub fn sign(
         self: Ed25519Sign,
         seed: [32]u8,
@@ -57,7 +57,7 @@ pub const Ed25519Sign = struct {
         self.writeOperand(M, msg);
         self.writeOperand(Z, z);
         self.mmio.write(u32, CTRL, 1); // START
-        while (self.mmio.read(u32, STATUS) & 0x1 != 0) {} // wait for !busy
+        while (self.mmio.read(u32, STATUS) & 0x1 != 0) {} // wait until not busy
         self.readOperand(R, r_out);
         self.readOperand(S, s_out);
     }

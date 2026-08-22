@@ -2,9 +2,9 @@
 //!
 //! The reusable `HarborTrng` block (a DRBG with SP 800-90B health tests). The
 //! fTPM firmware pulls randomness from it for TPM2_GetRandom and key generation.
-//! On the Albion 64-bit fabric the registers are 8-BYTE STRIDED (each 32-bit
-//! register on the low data lanes, so a 0x04 offset would land on the high lanes),
-//! matching HarborTrng's `busDataWidth >= 64` layout.
+//! On the Albion 64-bit fabric the registers use an 8-byte stride. Each 32-bit
+//! register sits on the low data lanes. A 0x04 offset would land on the high
+//! lanes. This matches HarborTrng's `busDataWidth >= 64` layout.
 //!   RAND   0x00 (RO): next DRBG word (reading advances the generator)
 //!   STATUS 0x08 (RO): bit0 = ready, bit1 = health-test failed
 

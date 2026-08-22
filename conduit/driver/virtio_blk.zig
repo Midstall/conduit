@@ -1,16 +1,16 @@
-//! virtio-blk over the virtio-mmio transport (modern, v2), implementing the
+//! virtio-blk over the virtio-mmio transport (modern, v2). It implements the
 //! `Block` contract. Ported from Weir's virtio/blk.zig: feature handshake, one
-//! split virtqueue, polled completion. Made instance-based (the virtqueue lives
-//! in the struct) and transport-agnostic (the slot is found by discovery, not
-//! by scanning a fixed address window).
+//! split virtqueue, polled completion. It is instance-based, so the virtqueue
+//! lives in the struct. It is transport-agnostic, so discovery finds the slot.
+//! It does not scan a fixed address window.
 //!
-//! IMPORTANT: the device DMAs into this struct's embedded virtqueue, so the
-//! struct must live at a stable address before the queue is programmed. Hence
-//! the two-step API: `bind` fills fields only; `start` performs the handshake
-//! and programs the queue against the final `*Virtio`. Call `start` once the
-//! value is in its permanent home. DMA uses `@intFromPtr` (identity-mapped, as
-//! in Weir's M-mode boot); a paged host must place the struct and read buffers
-//! in DMA-coherent memory.
+//! IMPORTANT: the device DMAs into this struct's embedded virtqueue. So the
+//! struct must live at a stable address before you program the queue. The API
+//! has two steps for this reason. `bind` fills fields only. `start` performs the
+//! handshake and programs the queue against the final `*Virtio`. Call `start`
+//! once the value is in its permanent home. DMA uses `@intFromPtr`
+//! (identity-mapped, as in Weir's M-mode boot). A paged host must place the
+//! struct and read buffers in DMA-coherent memory.
 
 const builtin = @import("builtin");
 const Mmio = @import("../mmio.zig");
@@ -75,7 +75,7 @@ pub const Virtio = struct {
     req_status: u8 align(16) = undefined,
 
     /// Run the virtio handshake and program the queue. Returns true if a v2
-    /// block device is ready. Must be called on the struct's final address.
+    /// block device is ready. Call it on the struct's final address.
     pub fn start(self: *Virtio) bool {
         if (self.mmio.read(u32, R_MAGIC) != MAGIC) return false;
         if (self.mmio.read(u32, R_DEVICE_ID) != DEVICE_ID_BLOCK) return false;
@@ -87,7 +87,7 @@ pub const Virtio = struct {
         status |= S_DRIVER;
         self.mmio.write(u32, R_STATUS, status);
 
-        // Accept exactly VIRTIO_F_VERSION_1; decline device-specific features.
+        // Accept exactly VIRTIO_F_VERSION_1. Decline device-specific features.
         self.mmio.write(u32, R_DRIVER_FEATURES_SEL, 1);
         self.mmio.write(u32, R_DRIVER_FEATURES, F_VERSION_1_HI);
         self.mmio.write(u32, R_DRIVER_FEATURES_SEL, 0);
@@ -179,8 +179,8 @@ pub fn bind(mmio: Mmio) Virtio {
     return .{ .mmio = mmio };
 }
 
-/// A memory barrier ordering virtqueue writes against the device. Comptime-
-/// selected per arch so conduit compiles for any target.
+/// A memory barrier. It orders virtqueue writes against the device. The compiler
+/// selects it per arch, so conduit compiles for any target.
 fn barrier() void {
     switch (builtin.cpu.arch) {
         .riscv64, .riscv32 => asm volatile ("fence" ::: .{ .memory = true }),

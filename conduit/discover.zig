@@ -41,6 +41,12 @@ pub const Match = struct {
     pub fn irq(self: *const Match, n: usize) ?resource.Resource.Irq {
         return self.resources.irq(n);
     }
+
+    /// True if the node declared the named boolean capability, such as a DT
+    /// `harbor,dma;` property or its ACPI _DSD equivalent.
+    pub fn hasFlag(self: *const Match, name: []const u8) bool {
+        return self.resources.hasFlag(name);
+    }
 };
 
 fn claim(matchers: []const Matcher, ids: []const match.Id, class: ?Class) ?Matcher {
@@ -109,7 +115,7 @@ pub const max_matches = 256;
 /// every matched device, baked into the binary.
 pub const Builder = struct {
     pub fn scan(be: anytype, matchers: []const Matcher) []const Match {
-        if (!@inComptime()) @compileError("Builder.scan is comptime-only; use Registry at runtime");
+        if (!@inComptime()) @compileError("Builder.scan is comptime-only. Use Registry at runtime");
         be.reset();
         var buf: [max_matches]Match = undefined;
         var n: usize = 0;
@@ -118,7 +124,7 @@ pub const Builder = struct {
             var list = resource.List{};
             be.resources(node, &list) catch |e|
                 @compileError("conduit: resource lowering failed for node '" ++ node.name ++ "': " ++ @errorName(e));
-            if (n >= max_matches) @compileError("conduit: more than max_matches devices; raise max_matches");
+            if (n >= max_matches) @compileError("conduit: more than max_matches devices. Raise max_matches");
             buf[n] = .{
                 .class = m.class,
                 .ids = node.ids,

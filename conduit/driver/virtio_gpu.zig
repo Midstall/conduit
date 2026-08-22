@@ -1,21 +1,23 @@
-//! virtio-gpu 2D over the virtio-mmio transport (modern, v2). Brings up the
-//! device, queries the scanout, creates a host 2D resource backed by a
-//! caller-supplied guest framebuffer, binds it to scanout 0, and presents by
-//! transferring the framebuffer to the host resource and flushing.
+//! virtio-gpu 2D over the virtio-mmio transport (modern, v2). It brings up the
+//! device and queries the scanout. It creates a host 2D resource. A
+//! caller-supplied guest framebuffer backs that resource. It binds the resource
+//! to scanout 0. To present, it transfers the framebuffer to the host resource
+//! and flushes.
 //!
-//! The transport (feature handshake, one split virtqueue, polled completion,
-//! `setQueueAddr` for QUEUE_DESC/DRIVER/DEVICE, the notify) mirrors
-//! `virtio_blk.zig`. Only the queue index (the control queue) and the command
-//! payloads differ. The protocol (the ctrl_hdr + the 2D command structs) is
-//! ported from Ferrite's working virtio-gpu driver.
+//! The transport mirrors `virtio_blk.zig`. The transport covers the feature
+//! handshake, one split virtqueue, polled completion, `setQueueAddr` for
+//! QUEUE_DESC/DRIVER/DEVICE, and the notify. Only the queue index (the control
+//! queue) and the command payloads differ. The protocol is the ctrl_hdr plus the
+//! 2D command structs. It comes from Ferrite's working virtio-gpu driver.
 //!
 //! IMPORTANT: the device DMAs into this struct's embedded virtqueue and into
-//! the command request/response buffers, so the struct must live at a stable
-//! address before the queue is programmed. Hence the two-step API: `bind` fills
-//! fields only, and `start` performs the handshake and programs the queue against
-//! the final `*Virtio`. Call `start` once the value is in its permanent home.
-//! DMA uses `@intFromPtr` (identity-mapped, as in Weir's M-mode boot). A paged
-//! host must place the struct and the framebuffer in DMA-coherent memory.
+//! the command request/response buffers. So the struct must live at a stable
+//! address before you program the queue. The API has two steps for this reason.
+//! `bind` fills fields only. `start` performs the handshake and programs the
+//! queue against the final `*Virtio`. Call `start` once the value is in its
+//! permanent home. DMA uses `@intFromPtr` (identity-mapped, as in Weir's M-mode
+//! boot). A paged host must place the struct and the framebuffer in DMA-coherent
+//! memory.
 //!
 //! The framebuffer is B8G8R8X8 (little-endian u32 0x00RRGGBB), stride = w*4.
 
@@ -24,9 +26,9 @@ const Mmio = @import("../mmio.zig");
 const match = @import("../match.zig");
 
 pub const matcher = match.Matcher{
-    // virtio-gpu is a display device, but conduit has no .display class yet, so
-    // it is discovered by the same virtio,mmio compatible the device exposes.
-    // A consumer narrows to GPU by reading R_DEVICE_ID after binding.
+    // virtio-gpu is a display device, but conduit has no .display class yet. So
+    // discovery uses the same virtio,mmio compatible the device exposes. A
+    // consumer narrows to GPU by reading R_DEVICE_ID after binding.
     .class = .pci,
     .dt_compatible = &.{"virtio,mmio"},
     .driver = "virtio_gpu",
@@ -61,12 +63,12 @@ const S_DRIVER_OK: u32 = 4;
 const S_FEATURES_OK: u32 = 8;
 
 const F_VERSION_1_HI: u32 = 1; // VIRTIO_F_VERSION_1 = bit 32
-// VIRTIO_GPU_F_VIRGL = feature bit 0 (low dword). Accepting it exposes the 3D
-// command set (CTX_CREATE / RESOURCE_CREATE_3D / SUBMIT_3D) on a virglrenderer
-// backed device (QEMU `-device virtio-gpu-gl-device`).
+// VIRTIO_GPU_F_VIRGL = feature bit 0 (low dword). The driver accepts it to
+// expose the 3D command set (CTX_CREATE / RESOURCE_CREATE_3D / SUBMIT_3D). This
+// needs a virglrenderer-backed device (QEMU `-device virtio-gpu-gl-device`).
 const F_VIRGL_LO: u32 = 1 << 0;
 
-// The control queue is queue 0, the cursor queue (1) is unused here.
+// The control queue is queue 0. This driver does not use the cursor queue (1).
 const VQ_CONTROL: u32 = 0;
 const QSIZE = 8;
 const VIRTQ_DESC_F_NEXT: u16 = 1;
@@ -240,13 +242,13 @@ pub const Virtio = struct {
     mmio: Mmio,
     present_ok: bool = false,
     last_used: u16 = 0,
-    // When true, `start` accepts VIRTIO_GPU_F_VIRGL so the device exposes the 3D
-    // command set. Left false for the plain 2D path so existing callers (and the
-    // 2D smoke) keep the exact handshake they had.
+    // When true, `start` accepts VIRTIO_GPU_F_VIRGL, so the device exposes the 3D
+    // command set. It stays false for the plain 2D path. Then existing callers
+    // (and the 2D smoke) keep the exact handshake they had.
     want_virgl: bool = false,
     virgl_ok: bool = false,
 
-    // Bound framebuffer state (set by `setup`).
+    // Bound framebuffer state. `setup` sets it.
     fb: [*]u8 = undefined,
     fb_w: u32 = 0,
     fb_h: u32 = 0,
@@ -260,8 +262,7 @@ pub const Virtio = struct {
     resp_buf: [RESP_CAP]u8 align(16) = undefined,
 
     /// Run the virtio handshake and program the control queue. Returns true if a
-    /// v2 virtio-gpu device is ready. Must be called on the struct's final
-    /// address.
+    /// v2 virtio-gpu device is ready. Call it on the struct's final address.
     pub fn start(self: *Virtio) bool {
         if (self.mmio.read(u32, R_MAGIC) != MAGIC) return false;
         if (self.mmio.read(u32, R_DEVICE_ID) != DEVICE_ID_GPU) return false;
@@ -276,7 +277,7 @@ pub const Virtio = struct {
         // Accept VIRTIO_F_VERSION_1 (high dword). For the 3D path also accept
         // VIRTIO_GPU_F_VIRGL (low dword bit 0) when the device offers it. The
         // plain 2D path declines all device-specific features (no VIRGL, no
-        // EDID), since a 2D scanout needs none of them.
+        // EDID), because a 2D scanout needs none of them.
         self.mmio.write(u32, R_DRIVER_FEATURES_SEL, 1);
         self.mmio.write(u32, R_DRIVER_FEATURES, F_VERSION_1_HI);
         self.mmio.write(u32, R_DRIVER_FEATURES_SEL, 0);
@@ -320,9 +321,9 @@ pub const Virtio = struct {
         self.mmio.write(u32, off + 4, @truncate(addr >> 32));
     }
 
-    /// Submit a request/response pair on the control queue and block until the
-    /// device returns the descriptor. `req` is copied into the DMA request
-    /// buffer, and the response header type is returned (0 on timeout).
+    /// Submit a request/response pair on the control queue. Block until the
+    /// device returns the descriptor. This copies `req` into the DMA request
+    /// buffer. It returns the response header type (0 on timeout).
     fn submit(self: *Virtio, req: []const u8, resp_len: usize) u32 {
         @memcpy(self.req_buf[0..req.len], req);
 
@@ -356,11 +357,11 @@ pub const Virtio = struct {
     }
 
     /// Like `submit`, but chains a second device-readable descriptor (`extra`)
-    /// after the request header. Used by SUBMIT_3D, where the request is the
-    /// fixed CmdSubmit3D header followed by the variable-length virgl command
-    /// stream. `req` and `extra` are both copied into DMA-visible memory (`req`
-    /// into req_buf, and `extra` must already live in DMA-coherent memory, so the
-    /// caller passes a pointer into such a buffer). Returns the response type.
+    /// after the request header. SUBMIT_3D uses it. There the request is the
+    /// fixed CmdSubmit3D header, followed by the variable-length virgl command
+    /// stream. This copies `req` into req_buf. It does not copy `extra`. `extra`
+    /// must already live in DMA-coherent memory, so the caller passes a pointer
+    /// into such a buffer. Returns the response type.
     fn submit2(self: *Virtio, req: []const u8, extra: []const u8, resp_len: usize) u32 {
         @memcpy(self.req_buf[0..req.len], req);
 
@@ -415,7 +416,7 @@ pub const Virtio = struct {
     /// Bind a guest framebuffer (B8G8R8X8, stride w*4) as the scanout 0 surface:
     /// create the host 2D resource, attach `fb` as its backing, and set scanout
     /// 0 to it. After this, draw into `fb` and call `present`. Returns false if
-    /// any command is rejected by the device.
+    /// the device rejects any command.
     pub fn setup(self: *Virtio, fb: [*]u8, w: u32, h: u32) bool {
         const create = ResourceCreate2D{
             .hdr = .{ .type = CMD_RESOURCE_CREATE_2D },
@@ -647,8 +648,8 @@ fn asBytes(ptr: anytype) []const u8 {
     return p[0..@sizeOf(T)];
 }
 
-/// A memory barrier ordering virtqueue writes against the device. Comptime-
-/// selected per arch so conduit compiles for any target.
+/// A memory barrier. It orders virtqueue writes against the device. The compiler
+/// selects it per arch, so conduit compiles for any target.
 fn barrier() void {
     switch (builtin.cpu.arch) {
         .riscv64, .riscv32 => asm volatile ("fence" ::: .{ .memory = true }),

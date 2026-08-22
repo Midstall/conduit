@@ -5,8 +5,8 @@
 //! config-space (vendor/device/class), and resolves BARs. BAR bases come STRAIGHT
 //! from config space (offset 0x10 + 0x14/0x18..., masking the low type bits and
 //! folding the high dword of a 64-bit BAR). This is the proven approach, immune
-//! to the ACPI QWORD-descriptor parse bug. GetBarAttributes is used only to refine
-//! each BAR's size (informational).
+//! to the ACPI QWORD-descriptor parse bug. conduit uses GetBarAttributes only to
+//! refine each BAR's size (informational).
 //!
 //! The hand-rolled EFI_PCI_IO_PROTOCOL wrapper (GUID 4cf5b200-..., the Mem/Io/Pci
 //! access groups plus GetLocation and GetBarAttributes fn-table) lives in

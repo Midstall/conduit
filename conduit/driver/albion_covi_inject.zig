@@ -1,9 +1,10 @@
 //! Albion COVI injection-aperture driver: the AP-facing fast path for interrupt
-//! injection (the only AP-reachable injection surface, firewall-whitelisted). A
-//! write presents `{realm, irq}` to the COVI gate. A permitted injection becomes
-//! pending for the realm, a denied one is dropped (and the COVI faults). The AP's
-//! realm-entry path reads the pending set and acks delivered interrupts. The
-//! per-realm allow-list itself lives on the SEP-only COVI control plane.
+//! injection. This is the only AP-reachable injection surface, and the firewall
+//! whitelists it. A write presents `{realm, irq}` to the COVI gate. The gate makes
+//! a permitted injection pending for the realm. It drops a denied injection and
+//! faults. The AP's realm-entry path reads the pending set and acknowledges
+//! delivered interrupts. The per-realm allow-list lives on the SEP-only COVI
+//! control plane.
 //!
 //! Registers (8-byte strided, match lib/src/covi/covi_inject.dart):
 //!   0x00 INJECT (W: data = (realm<<8)|irq)  0x08 SEL (RW)  0x10 PENDING (RO)
@@ -19,7 +20,7 @@ pub const CoviInject = struct {
     const PENDING = 0x10;
     const ACK = 0x18;
 
-    /// Request injection of `irq` into `realm` (gated inline by the COVI gate).
+    /// Request injection of `irq` into `realm`. The COVI gate checks it inline.
     pub fn inject(self: CoviInject, realm: u8, irq: u32) void {
         self.mmio.write(u32, INJECT, (@as(u32, realm) << 8) | (irq & 0xff));
     }

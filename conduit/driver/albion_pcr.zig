@@ -1,10 +1,10 @@
 //! Albion PCR-bank driver, over an `Mmio`.
 //!
-//! The hardware TPM PCR bank (`AlbionTpm`, default window 0x4000_3000): a bank of
+//! The hardware TPM PCR bank (`AlbionTpm`, default window 0x4000_3000) is a bank of
 //! 256-bit Platform Configuration Registers with a hardware SHA-256 extend
 //! (PCR = SHA-256(PCR_old || data)). The fTPM firmware drives this for the real
-//! PCR_Extend/PCR_Read primitives. 32-bit word accesses, digests are big-endian
-//! (word 0 = the most-significant 32 bits).
+//! PCR_Extend/PCR_Read primitives. Accesses are 32-bit words. Digests are
+//! big-endian (word 0 = the most-significant 32 bits).
 //!   SELECT   0x00 (RW): active PCR index
 //!   EXTEND   0x04 (W bit0 = start, R bit0 = busy)
 //!   STATUS   0x08 (RO): bit0 = busy, bit1 = external TPM present

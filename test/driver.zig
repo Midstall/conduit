@@ -1,14 +1,14 @@
-//! Driver round-trip tests: bind a driver over a fake in-memory register file
-//! and assert the right register traffic, exercising the `Mmio` seam and the
-//! `Serial` contract without touching hardware.
+//! Driver round-trip tests. Each test binds a driver over a fake in-memory
+//! register file. It asserts the correct register traffic. It exercises the
+//! `Mmio` seam and the `Serial` contract without hardware.
 
 const std = @import("std");
 const Mmio = @import("conduit").Mmio;
 const ns16550a = @import("conduit").driver.ns16550a;
 const pl011 = @import("conduit").driver.pl011;
 
-/// A byte-addressed fake register file. `tx_ready_off`/`tx_ready_bit` are forced
-/// high so polling writes never spin.
+/// A byte-addressed fake register file. It forces `ready_off`/`ready_bit` high so
+/// polling writes never spin.
 const FakeRegs = struct {
     buf: [256]u8 = [_]u8{0} ** 256,
     ready_off: usize,
@@ -50,7 +50,7 @@ const FakeRegs = struct {
 
 test "ns16550a: init programs 8N1 and write lands in THR" {
     var regs = FakeRegs{ .ready_off = 5, .ready_bit = 0x20 }; // LSR THRE
-    var uart = ns16550a.bind(regs.mmio());
+    var uart = ns16550a.bind(regs.mmio(), .{});
 
     try std.testing.expectEqual(@as(u8, 0x03), regs.buf[3]); // LCR = 8N1 from init
 

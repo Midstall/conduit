@@ -1,10 +1,11 @@
 //! Albion fTPM-port driver, over an `Mmio`.
 //!
-//! The SEP-facing side of the TPM TIS seam (the hardware block `AlbionFtpmPort`,
-//! default window 0x4000_B000). The SEP firmware, woken by the TIS doorbell
-//! (MSIP), drains the AP's TPM2 command and writes the response through these
-//! registers. All accesses are 32-bit words (the SoC fabric is 64-bit, but the
-//! registers live on the low lanes, so word accesses avoid the byte-lane hazard).
+//! This is the SEP-facing side of the TPM TIS seam (the hardware block
+//! `AlbionFtpmPort`, default window 0x4000_B000). The TIS doorbell (MSIP) wakes the
+//! SEP firmware. The firmware drains the AP's TPM2 command. It writes the response
+//! through these registers. All accesses are 32-bit words. The SoC fabric is
+//! 64-bit, but the registers live on the low lanes, so word accesses avoid the
+//! byte-lane hazard.
 //!   STATUS      0x00 (RO): bit0 = command pending, bits[31:16] = command length
 //!   CMD_ADDR    0x04 (RW): command byte index to read
 //!   CMD_DATA    0x08 (RO): command byte at CMD_ADDR
@@ -48,7 +49,7 @@ pub const FtpmPort = struct {
         self.mmio.write(u32, RESP_DATA, b);
     }
 
-    /// Publish the response: set its length and signal completion to the TIS.
+    /// Publish the response. Set its length and signal completion to the TIS.
     pub fn commitResponse(self: FtpmPort, len: u16) void {
         self.mmio.write(u32, RESP_LEN, len);
         self.mmio.write(u32, RESP_COMMIT, 1);

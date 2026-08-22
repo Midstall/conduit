@@ -1,5 +1,5 @@
 //! Albion GPC driver: drives the granule-protection reference monitor's control
-//! ops over an `Mmio`. The RMM firmware uses this to realise the realm lifecycle
+//! ops over an `Mmio`. The RMM firmware uses this to run the realm lifecycle
 //! (create/assign/program-stream/destroy) and to turn enforcement on.
 //!
 //! Register map (8-byte strided, matches lib/src/gpc/gpc.dart):
@@ -45,8 +45,8 @@ pub const Gpc = struct {
         _,
     };
 
-    /// Submit one op: stage the args, write CMD, wait for the busy bit to clear
-    /// (reclaim/destroy run a bounded scrub), then return the result code.
+    /// Submit one op. Stage the args, write CMD, then wait for the busy bit to
+    /// clear. Reclaim and destroy run a bounded scrub. Return the result code.
     fn submit(self: Gpc, op: u32, realm: u32, gran: u32, stream: u32, world: u32) Result {
         self.mmio.write(u32, ARG_REALM, realm);
         self.mmio.write(u32, ARG_GRAN, gran);

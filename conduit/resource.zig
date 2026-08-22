@@ -2,13 +2,14 @@
 //! native descriptions into this union, so drivers and consumers never see a DT
 //! cell or an ACPI `_CRS` descriptor, only a `Resource`.
 
+const std = @import("std");
 const config = @import("config.zig");
 
 pub const Trigger = enum { edge, level, unknown };
 pub const Polarity = enum { high, low, unknown };
 
 /// A cross-reference to another device (a clock provider, a GPIO controller).
-/// Stored but not auto-resolved in the first cut.
+/// conduit stores it but does not auto-resolve it in the first cut.
 pub const Ref = union(enum) {
     none,
     phandle: u32,
@@ -22,6 +23,10 @@ pub const Resource = union(enum) {
     clock: Clock,
     gpio: Gpio,
     reg_io: PortIo,
+    /// A named boolean capability the node declares: a DT empty-valued property
+    /// (`harbor,dma;`) or an ACPI _DSD property set true. Its presence is the
+    /// whole signal, so it carries only the property name.
+    flag: []const u8,
 
     /// An MMIO window, already translated from bus to CPU address space (via DT
     /// `ranges` or ACPI `_CRS`).
@@ -78,6 +83,15 @@ pub const List = struct {
         return null;
     }
 
+    /// True if the node declared the named boolean capability `name`.
+    pub fn hasFlag(self: *const List, name: []const u8) bool {
+        for (self.slice()) |r| switch (r) {
+            .flag => |f| if (std.mem.eql(u8, f, name)) return true,
+            else => {},
+        };
+        return false;
+    }
+
     /// Nth IRQ (0-based), if present.
     pub fn irq(self: *const List, n: usize) ?Resource.Irq {
         var i: usize = 0;
@@ -91,3 +105,11 @@ pub const List = struct {
         return null;
     }
 };
+
+test "hasFlag reports a declared capability by name" {
+    var list = List{};
+    try list.append(.{ .mmio = .{ .base = 0x1000, .size = 0x100 } });
+    try list.append(.{ .flag = "harbor,dma" });
+    try std.testing.expect(list.hasFlag("harbor,dma"));
+    try std.testing.expect(!list.hasFlag("harbor,other"));
+}

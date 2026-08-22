@@ -1,7 +1,7 @@
 //! Albion measurement-bank driver: drives the per-realm RIM/REM registers over an
-//! `Mmio`. The RMM allocates a slot per realm, extends the RIM with the initial
-//! granules, locks it at activation, and frees it at destroy. SP4 attestation
-//! reads the measurements into the token.
+//! `Mmio`. The RMM allocates a slot per realm and extends the RIM with the initial
+//! granules. It locks the slot at activation and frees it at destroy. SP4
+//! attestation reads the measurements into the token.
 //!
 //! Register map (8-byte strided, matches lib/src/measure/measure.dart):
 //!   0x00 SLOT_SEL (RW)  0x08 REG_SEL (RW: 0=RIM, 1..=REM)  0x10 EXTEND (W bit0)

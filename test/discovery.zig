@@ -41,6 +41,18 @@ test "runtime: iterate ALL virtio-mmio block devices" {
     try std.testing.expect(count >= 1);
 }
 
+test "runtime: an empty-valued DT property lowers to a capability flag" {
+    var reader = try dtree.Reader.initBuffer(&blob);
+    var be = dt.DtBackend.init(&reader);
+    const reg = discover.Registry.init(be.any(), &matchers);
+
+    // The PLIC node carries the empty boolean `interrupt-controller;`, so the
+    // match must report it as a flag, and must not report one it does not have.
+    const plic = (try reg.find(.intc)) orelse return error.NoPlic;
+    try std.testing.expect(plic.hasFlag("interrupt-controller"));
+    try std.testing.expect(!plic.hasFlag("harbor,dma"));
+}
+
 test "comptime: Builder bakes the uart base into a constant" {
     const baked = comptime blk: {
         @setEvalBranchQuota(20_000_000);

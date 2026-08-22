@@ -1,8 +1,8 @@
 //! Albion COVI driver: the SEP/RMM side of the hardware interrupt-mediation core.
-//! The RMM programs each realm's interrupt allow-list here. The hardware gate then
-//! enforces, inline, that the host can only inject a permitted interrupt. This
-//! mirrors the RMM's software mediation into silicon, where the host cannot bypass
-//! it. SEP-/Root-side window only (not in the AP firewall whitelist).
+//! The RMM programs each realm's interrupt allow-list here. The hardware gate
+//! enforces the list inline. The host can inject only a permitted interrupt. The
+//! gate puts the RMM's software rule into silicon, so the host cannot bypass it.
+//! This is the SEP/Root-side window only. It is not in the AP firewall whitelist.
 //!
 //! Registers (8-byte strided, match lib/src/covi/covi.dart):
 //!   0x00 ARG_REALM (RW)  0x08 ARG_IRQ (RW)  0x10 CMD (W)  0x18 RESULT (RO)

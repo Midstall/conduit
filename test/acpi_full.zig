@@ -1,6 +1,6 @@
-//! ACPI full (AML) discovery test. Loads a compiled DSDT into an almanac
-//! namespace + interpreter, then enumerates devices through conduit's Full
-//! backend, matching on _HID and lowering _CRS into resources.
+//! This test discovers full ACPI (AML) devices. It loads a compiled DSDT into an
+//! almanac namespace and interpreter. Then it enumerates devices through
+//! conduit's Full backend. It matches on _HID and lowers _CRS into resources.
 
 const std = @import("std");
 const almanac = @import("almanac");

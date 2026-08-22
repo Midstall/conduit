@@ -131,8 +131,8 @@ pub const BarInfo = struct {
 
 /// ACPI 2.0 QWORD Address Space Descriptor (type 0x8A). UEFI GetBarAttributes
 /// returns one (or an End tag 0x79 if the BAR is unused). The descriptor is
-/// BYTE-PACKED with no alignment padding, so its u64 fields must be read at
-/// their exact unaligned byte offsets. An `extern struct` is WRONG here: u16/u64
+/// BYTE-PACKED with no alignment padding, so read its u64 fields at their exact
+/// unaligned byte offsets. An `extern struct` is WRONG here: u16/u64
 /// natural alignment shifts AddrRangeMin to byte 16 and AddrLen to byte 40
 /// instead of the spec's 14 and 38, reading every address 2 bytes off and
 /// returning garbage. Spec offsets: tag@0, len@1, restype@3, genflags@4,

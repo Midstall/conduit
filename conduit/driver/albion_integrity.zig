@@ -1,11 +1,12 @@
 //! Albion integrity-descriptor driver, over an `Mmio`.
 //!
 //! The hardware sticky-fail attestation register (`AlbionIntegrity`, default
-//! window 0x4000_D000): one bit per platform component, latched VERIFIED out of
-//! reset. The SEP firmware marks a component FAILED (write-1-to-fail), and the bit
-//! then stays cleared until reset (monotonic, malware cannot forge a clean
-//! attestation). The AP reads the live vector for attestation but cannot write.
-//! Registers are 8-byte-strided (low-lane convention for the SEP's 64-bit bus).
+//! window 0x4000_D000) holds one bit per platform component. Each bit latches
+//! VERIFIED out of reset. The SEP firmware marks a component FAILED
+//! (write-1-to-fail). The bit then stays cleared until reset. This is monotonic,
+//! so malware cannot forge a clean attestation. The AP reads the live vector for
+//! attestation, but it cannot write. Registers are 8-byte-strided (low-lane
+//! convention for the SEP's 64-bit bus).
 //!   STATUS     0x00 (RO): bit i = component i verified (1) / failed (0).
 //!   FAIL       0x08 (W):  write-1-to-fail, each set bit permanently clears that
 //!                         component (writing 0 is a no-op).

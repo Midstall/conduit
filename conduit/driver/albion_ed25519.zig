@@ -1,19 +1,19 @@
 //! Albion Ed25519-verify offload driver, over an `Mmio`.
 //!
 //! The hardware signature-verify engine (`AlbionEd25519Verify`, default window
-//! 0x4000_C000): a full RFC 8032 §5.1.7 Ed25519 verifier in silicon. The SEP
-//! firmware (Ferrite's signature path) and the secure-boot ROM drive it to
-//! verify a signature in hardware instead of running the Curve25519 double-
-//! scalar multiply in software (hundreds of millions of cycles on the in-order
-//! SEP). The engine fixes the message to a 32-byte digest (the SHA-256 prehash
-//! Ferrite signs) and computes `SHA-512(R || A || M)` itself.
+//! 0x4000_C000) is a full RFC 8032 §5.1.7 Ed25519 verifier in silicon. The SEP
+//! firmware (Ferrite's signature path) and the secure-boot ROM drive it. They
+//! verify a signature in hardware. They do not run the Curve25519 double-scalar
+//! multiply in software, which costs hundreds of millions of cycles on the
+//! in-order SEP. The engine fixes the message to a 32-byte digest (the SHA-256
+//! prehash that Ferrite signs). The engine computes `SHA-512(R || A || M)` itself.
 //!
-//! 32-bit word accesses. Registers are 8-BYTE-STRIDED (each on the low data
-//! lanes) because the Albion SEP's 64-bit master places a 32-bit store on the
-//! lane chosen by the address, so an 8-aligned offset keeps every register on the
-//! low lanes and distinct by ADR. Each 256-bit operand is eight LITTLE-ENDIAN
-//! 32-bit words: word `i` holds operand bytes `[4i .. 4i+4]` (byte `4i` = the
-//! word's low byte), the on-wire Ed25519 LE encoding read four bytes at a time.
+//! Accesses are 32-bit words. Registers are 8-BYTE-STRIDED, each on the low data
+//! lanes. The Albion SEP's 64-bit master places a 32-bit store on the lane that
+//! the address selects. An 8-aligned offset keeps every register on the low lanes
+//! and distinct by ADR. Each 256-bit operand is eight LITTLE-ENDIAN 32-bit words.
+//! Word `i` holds operand bytes `[4i .. 4i+4]`, and byte `4i` is the word's low
+//! byte. This matches the on-wire Ed25519 LE encoding, read four bytes at a time.
 //!   CTRL   0x00 (W):       bit0 = START (ignored unless the engine is idle).
 //!   STATUS 0x08 (RO):      bit0 = busy, bit1 = done (sticky), bit2 = accept.
 //!   A[i]   0x40 + 8*i (RW, i in 0..7): public key (32-byte LE encoding).
@@ -52,10 +52,11 @@ pub const Ed25519 = struct {
         }
     }
 
-    /// Verify an Ed25519 signature in hardware. `pubkey`/`r`/`s` are the on-wire
-    /// 32-byte LITTLE-ENDIAN encodings (the signature is `r || s`), and `msg` is the
-    /// 32-byte digest that was signed. Loads the operands, launches the engine,
-    /// blocks until it completes, and returns true iff the signature verifies.
+    /// Verify an Ed25519 signature in hardware. `pubkey`, `r`, and `s` are the
+    /// on-wire 32-byte LITTLE-ENDIAN encodings, and the signature is `r || s`. `msg`
+    /// is the 32-byte digest that was signed. This loads the operands and launches
+    /// the engine. It blocks until the engine completes. It returns true only if the
+    /// signature verifies.
     pub fn verify(self: Ed25519, pubkey: [32]u8, r: [32]u8, s: [32]u8, msg: [32]u8) bool {
         self.loadOperand(A, pubkey);
         self.loadOperand(R, r);

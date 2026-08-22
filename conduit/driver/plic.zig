@@ -61,7 +61,7 @@ pub const Plic = struct {
         self.mmio.write(u32, self.claimOff(), irq);
     }
 
-    /// Set the context's priority threshold (interrupts at or below are masked).
+    /// Set the context's priority threshold. The PLIC masks interrupts at or below it.
     pub fn setThreshold(self: Plic, threshold: u32) void {
         self.mmio.write(u32, self.thresholdOff(), threshold);
     }

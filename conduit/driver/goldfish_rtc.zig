@@ -21,7 +21,7 @@ pub const Goldfish = struct {
     const NS_PER_S = 1_000_000_000;
 
     pub fn now(self: Goldfish) Rtc.DateTime {
-        const low = self.mmio.read(u32, TIME_LOW); // latches HIGH; read LOW first
+        const low = self.mmio.read(u32, TIME_LOW); // read LOW first, it latches HIGH
         const high = self.mmio.read(u32, TIME_HIGH);
         const ns = (@as(u64, high) << 32) | low;
         return Rtc.fromUnix(@intCast(ns / NS_PER_S));

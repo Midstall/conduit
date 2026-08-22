@@ -93,7 +93,7 @@ pub const LinuxPciBackend = struct {
         var lines = std.mem.splitScalar(u8, text, '\n');
         var bar: usize = 0;
         while (lines.next()) |line| : (bar += 1) {
-            if (bar >= 6) break; // only BAR0..5; ignore the expansion ROM line.
+            if (bar >= 6) break; // only BAR0..5. Ignore the expansion ROM line.
             if (line.len == 0) continue;
             const r = parseResourceLine(line) orelse continue;
             if (r.start == 0) continue; // unpopulated BAR.

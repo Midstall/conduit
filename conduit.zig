@@ -1,13 +1,13 @@
 //! conduit: a hardware abstraction layer for Zig.
 //!
-//! Shared by Weir (RISC-V firmware) and Ferrite (microkernel). Two decoupled
-//! halves bridged by `Mmio` + `Backend` + `Resource`:
+//! Weir (RISC-V firmware) and Ferrite (microkernel) share it. `Mmio`,
+//! `Backend`, and `Resource` bridge two decoupled halves:
 //!
 //!   * Discovery: a pluggable `Backend` (device tree, ACPI, or a host's own)
-//!     feeding a match-rule `Registry` (runtime) or `Builder` (comptime) that
-//!     iterates every device of a class.
-//!   * Driving: device-class contracts (`device.*`) implemented by shipped
-//!     drivers (`driver.*`), each binding over an `Mmio`.
+//!     feeds a match-rule `Registry` (runtime) or `Builder` (comptime). Each
+//!     one iterates every device of a class.
+//!   * Driving: shipped drivers (`driver.*`) implement device-class contracts
+//!     (`device.*`). Each driver binds over an `Mmio`.
 //!
 //! See docs/superpowers/specs/2026-06-09-conduit-hal-design.md for the design.
 
@@ -64,6 +64,7 @@ pub const device = struct {
     pub const Spi = @import("conduit/device/spi.zig");
     pub const Rtc = @import("conduit/device/rtc.zig");
     pub const Intc = @import("conduit/device/intc.zig");
+    pub const Sd = @import("conduit/device/sd.zig");
 };
 
 /// Shipped driver implementations. Each exports `bind(Mmio, ...)`, and the
@@ -80,7 +81,11 @@ pub const driver = struct {
     pub const clint = @import("conduit/driver/clint.zig");
     pub const gicv2 = @import("conduit/driver/gicv2.zig");
     pub const gicv3 = @import("conduit/driver/gicv3.zig");
-    pub const sdhci = @import("conduit/driver/sdhci.zig");
+    pub const harbor_sdio = @import("conduit/driver/harbor_sdio.zig");
+    /// Deprecated spelling of [harbor_sdio]. The controller is Harbor's own
+    /// register map, not the SD Host Controller Standard one.
+    pub const sdhci = harbor_sdio;
+    pub const sd_spi = @import("conduit/driver/sd_spi.zig");
     pub const virtio_blk = @import("conduit/driver/virtio_blk.zig");
     pub const virtio_gpu = @import("conduit/driver/virtio_gpu.zig");
     pub const goldfish_rtc = @import("conduit/driver/goldfish_rtc.zig");
@@ -112,7 +117,8 @@ pub const all_matchers = [_]Matcher{
     driver.clint.matcher,
     driver.gicv2.matcher,
     driver.gicv3.matcher,
-    driver.sdhci.matcher,
+    driver.harbor_sdio.matcher,
+    driver.sd_spi.matcher,
     driver.virtio_blk.matcher,
     driver.goldfish_rtc.matcher,
     driver.pl031.matcher,
@@ -126,22 +132,22 @@ test {
     _ = resource;
     _ = Mmio;
     _ = discover;
-    inline for (.{ device.Serial, device.Block, device.Gpio, device.I2c, device.Spi, device.Rtc, device.Intc }) |d| _ = d;
+    inline for (.{ device.Serial, device.Block, device.Gpio, device.I2c, device.Spi, device.Rtc, device.Intc, device.Sd }) |d| _ = d;
     inline for (.{
-        driver.ns16550a,           driver.pl011,               driver.harbor_gpio,      driver.harbor_i2c,
-        driver.harbor_spi,         driver.plic,                driver.clint,            driver.gicv2,
-        driver.gicv3,              driver.sdhci,               driver.virtio_blk,       driver.virtio_gpu,
-        driver.goldfish_rtc,       driver.pl031,               driver.albion_ftpm,      driver.albion_pcr,
-        driver.harbor_trng,        driver.albion_ed25519,      driver.albion_integrity, driver.albion_gpc,
-        driver.albion_rmm,         driver.albion_measure,      driver.albion_sealver,   driver.albion_covi,
-        driver.albion_covi_inject, driver.albion_ed25519_sign, driver.albion_rotkdf,
+        driver.ns16550a,    driver.pl011,              driver.harbor_gpio,         driver.harbor_i2c,
+        driver.harbor_spi,  driver.plic,               driver.clint,               driver.gicv2,
+        driver.gicv3,       driver.harbor_sdio,        driver.sd_spi,              driver.virtio_blk,
+        driver.virtio_gpu,  driver.goldfish_rtc,       driver.pl031,               driver.albion_ftpm,
+        driver.albion_pcr,  driver.harbor_trng,        driver.albion_ed25519,      driver.albion_integrity,
+        driver.albion_gpc,  driver.albion_rmm,         driver.albion_measure,      driver.albion_sealver,
+        driver.albion_covi, driver.albion_covi_inject, driver.albion_ed25519_sign, driver.albion_rotkdf,
     }) |d| _ = d;
     if (config.have_dtree) _ = backend.dtree;
     if (config.have_almanac) _ = backend.almanac;
     if (config.have_pci and pci_supported) _ = backend.pci;
 }
 
-/// A matcher that claims every PCI device (any vendor/class), so the string
-/// `Registry`/`Builder` path enumerates PCI nodes, and a consumer then refines on
-/// `Match.pci` (the numeric vendor/device/class). Pair it with `Class.pci`.
+/// A matcher that claims every PCI device (any vendor or class). The string
+/// `Registry`/`Builder` path then enumerates PCI nodes. A consumer refines on
+/// `Match.pci` (the numeric vendor, device, and class). Pair it with `Class.pci`.
 pub const pci_matcher = Matcher{ .class = .pci, .dt_compatible = &.{"pci"} };

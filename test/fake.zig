@@ -4,8 +4,8 @@ const std = @import("std");
 const Mmio = @import("conduit").Mmio;
 
 /// A flat little-endian register file of `N` bytes. `force_off`/`force_val` pin
-/// one register's read value (and swallow writes to it) to model status bits a
-/// poll loop waits on. Good for small-offset drivers.
+/// one register's read value and discard writes to it. This models the status
+/// bits a poll loop waits on. Use it for small-offset drivers.
 pub fn Flat(comptime N: usize) type {
     return struct {
         const Self = @This();
@@ -43,10 +43,10 @@ pub fn Flat(comptime N: usize) type {
     };
 }
 
-/// A sparse register file: records writes and serves reads from the last write
-/// to that offset (or a preset read override). For drivers with huge offsets
-/// (PLIC claim at 0x200004, GIC distributor banks) where a flat buffer is
-/// impractical.
+/// A sparse register file. It records writes. It serves reads from the last write
+/// to that offset, or from a preset read override. Use it for drivers with huge
+/// offsets where a flat buffer is impractical, like the PLIC claim register at
+/// 0x200004 or GIC distributor banks.
 pub const Sparse = struct {
     const Entry = struct { off: usize, val: u64 };
 
@@ -85,7 +85,7 @@ pub const Sparse = struct {
         return null;
     }
 
-    /// Pin a read value at `off` (e.g. a GIC IAR / PLIC claim register).
+    /// Pin a read value at `off`, for example a GIC IAR or PLIC claim register.
     pub fn setRead(self: *Sparse, off: usize, val: u64) void {
         self.reads[self.nr] = .{ .off = off, .val = val };
         self.nr += 1;
