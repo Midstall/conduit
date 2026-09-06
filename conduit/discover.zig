@@ -84,6 +84,13 @@ pub const Registry = struct {
         return it.next();
     }
 
+    /// The architectural timebase in Hz the platform declares, or null when the
+    /// backend cannot report it. See `Backend.timebaseHz`. It is not a device
+    /// resource, so it is not reachable through `find` or `iter`.
+    pub fn timebaseHz(self: *const Registry) backend.Error!?u64 {
+        return self.be.timebaseHz();
+    }
+
     pub const Iterator = struct {
         reg: *const Registry,
         class: ?Class,
@@ -138,6 +145,17 @@ pub const Builder = struct {
         const out = buf;
         const len = n;
         return out[0..len];
+    }
+
+    /// The architectural timebase in Hz, baked at comptime. See
+    /// `Backend.timebaseHz`. Null when the backend has no `timebaseHz` method,
+    /// or when the platform description does not declare one. The caller then
+    /// owns the choice of a default, and must not hide that it made one.
+    pub fn timebaseHz(be: anytype) ?u64 {
+        if (!@inComptime()) @compileError("Builder.timebaseHz is comptime-only. Use Registry at runtime");
+        if (!@hasDecl(@typeInfo(@TypeOf(be)).pointer.child, "timebaseHz")) return null;
+        return be.timebaseHz() catch |e|
+            @compileError("conduit: timebase lookup failed: " ++ @errorName(e));
     }
 };
 

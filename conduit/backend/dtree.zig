@@ -239,6 +239,52 @@ pub const DtBackend = struct {
         }
     }
 
+    /// The architectural timebase in Hz, or null when the tree does not say.
+    ///
+    /// The RISC-V binding puts `timebase-frequency` on `/cpus/cpu@N`, and the
+    /// older form puts one value on the `/cpus` parent for every hart. A cpu
+    /// node's own property wins over the parent's. The counter this rate belongs
+    /// to is the hart's, so it is never read off the CLINT: a CLINT node
+    /// normally declares no `clock-frequency` at all.
+    ///
+    /// This is a whole-tree question, not a per-node resource, so it walks a
+    /// fresh iterator and leaves the discovery cursor untouched.
+    pub fn timebaseHz(self: *const DtBackend) backend.Error!?u64 {
+        var it = self.reader.nodeIterator();
+        // Depth of the enclosing /cpus and cpu@N nodes, while each is open.
+        var cpus_depth: ?usize = null;
+        var cpu_depth: ?usize = null;
+        var from_cpus: ?u64 = null;
+        while (it.next() catch return error.BadFormat) |n| switch (n) {
+            .begin => |b| {
+                if (cpus_depth != null and std.mem.startsWith(u8, b.name, "cpu@")) {
+                    cpu_depth = b.depth;
+                } else if (std.mem.eql(u8, b.name, "cpus")) {
+                    cpus_depth = b.depth;
+                }
+            },
+            .end => |e| {
+                if (cpu_depth) |d| if (e.depth <= d) {
+                    cpu_depth = null;
+                };
+                if (cpus_depth) |d| if (e.depth <= d) {
+                    cpus_depth = null;
+                };
+            },
+            // A property reports the depth of its node plus one, so `d + 1`
+            // keeps a grandchild (a cpu's interrupt-controller) from matching.
+            .prop => |p| if (std.mem.eql(u8, p.name, "timebase-frequency")) {
+                const hz = beCell(p.value) orelse continue;
+                if (cpu_depth) |d| {
+                    if (p.depth == d + 1) return hz;
+                } else if (cpus_depth) |d| {
+                    if (p.depth == d + 1) from_cpus = hz;
+                }
+            },
+        };
+        return from_cpus;
+    }
+
     /// Build the interrupt-controller map: every node carrying both a `phandle`
     /// and `#interrupt-cells`, keyed by phandle. Single accumulator works because
     /// in the DTB a node's properties always precede its subnodes.
@@ -421,4 +467,207 @@ test "ranges translation walks the bus chain" {
     try std.testing.expectEqual(@as(u64, 0x4000_0100), be.translate(0x100));
     // An address outside every window passes through unchanged.
     try std.testing.expectEqual(@as(u64, 0x9999), be.translate(0x9999));
+}
+
+// ---------------------------------------------------------------------------
+// Test helpers: build a small flattened device tree in memory, so a test can
+// pin a tree shape without carrying a binary fixture.
+// ---------------------------------------------------------------------------
+
+const TestProp = struct { name: []const u8, value: []const u8 };
+const TestNode = struct {
+    name: []const u8,
+    props: []const TestProp = &.{},
+    children: []const TestNode = &.{},
+};
+
+/// Big enough for the trees below, and small enough to stay cheap at comptime.
+const test_fdt_cap = 1024;
+
+const FdtBuf = struct {
+    bytes: [test_fdt_cap]u8 = @splat(0),
+    len: usize = 0,
+
+    fn cell(self: *FdtBuf, v: u32) void {
+        std.mem.writeInt(u32, self.bytes[self.len..][0..4], v, .big);
+        self.len += 4;
+    }
+    fn raw(self: *FdtBuf, v: []const u8) void {
+        @memcpy(self.bytes[self.len..][0..v.len], v);
+        self.len += v.len;
+    }
+    fn str(self: *FdtBuf, v: []const u8) void {
+        self.raw(v);
+        self.bytes[self.len] = 0;
+        self.len += 1;
+    }
+    /// Every FDT token starts on a 4-byte boundary.
+    fn pad(self: *FdtBuf) void {
+        while (self.len % 4 != 0) {
+            self.bytes[self.len] = 0;
+            self.len += 1;
+        }
+    }
+};
+
+const fdt_begin_node: u32 = 0x1;
+const fdt_end_node: u32 = 0x2;
+const fdt_prop: u32 = 0x3;
+const fdt_end: u32 = 0x9;
+
+fn emitTestNode(strct: *FdtBuf, strs: *FdtBuf, node: TestNode) void {
+    strct.cell(fdt_begin_node);
+    strct.str(node.name);
+    strct.pad();
+    for (node.props) |p| {
+        const name_off = strs.len;
+        strs.str(p.name);
+        strct.cell(fdt_prop);
+        strct.cell(@intCast(p.value.len));
+        strct.cell(@intCast(name_off));
+        strct.raw(p.value);
+        strct.pad();
+    }
+    for (node.children) |c| emitTestNode(strct, strs, c);
+    strct.cell(fdt_end_node);
+}
+
+/// A valid version-17 DTB holding `root`. Comptime only.
+fn buildTestFdt(comptime root: TestNode) []const u8 {
+    comptime {
+        @setEvalBranchQuota(100_000);
+        var strct = FdtBuf{};
+        var strs = FdtBuf{};
+        emitTestNode(&strct, &strs, root);
+        strct.cell(fdt_end);
+
+        const header_len = 40;
+        // One all-zero entry terminates the memory-reserve map.
+        const rsvmap_len = 16;
+        const off_struct = header_len + rsvmap_len;
+        const off_strings = off_struct + strct.len;
+        const total = off_strings + strs.len;
+
+        var hdr = FdtBuf{};
+        hdr.cell(0xd00dfeed); // magic
+        hdr.cell(total);
+        hdr.cell(off_struct);
+        hdr.cell(off_strings);
+        hdr.cell(header_len); // off_mem_rsvmap
+        hdr.cell(17); // version
+        hdr.cell(16); // last_comp_version
+        hdr.cell(0); // boot_cpuid_phys
+        hdr.cell(@intCast(strs.len));
+        hdr.cell(@intCast(strct.len));
+
+        var out: [test_fdt_cap]u8 = @splat(0);
+        @memcpy(out[0..header_len], hdr.bytes[0..header_len]);
+        @memcpy(out[off_struct..][0..strct.len], strct.bytes[0..strct.len]);
+        @memcpy(out[off_strings..][0..strs.len], strs.bytes[0..strs.len]);
+        const blob = out[0..total].*;
+        return &blob;
+    }
+}
+
+fn beU32(comptime v: u32) [4]u8 {
+    var b: [4]u8 = undefined;
+    std.mem.writeInt(u32, &b, v, .big);
+    return b;
+}
+
+const hz20m = beU32(20_000_000);
+const hz10m = beU32(10_000_000);
+
+fn timebaseOf(blob: []const u8) !?u64 {
+    var rd = try dtree.Reader.initBuffer(blob);
+    var be = DtBackend.init(&rd);
+    return be.timebaseHz();
+}
+
+test "timebase comes from the cpu node, which is where the RISC-V binding puts it" {
+    const blob = comptime buildTestFdt(.{ .name = "", .children = &.{
+        .{ .name = "cpus", .children = &.{
+            .{ .name = "cpu@0", .props = &.{.{ .name = "timebase-frequency", .value = &hz20m }} },
+        } },
+    } });
+    try std.testing.expectEqual(@as(?u64, 20_000_000), try timebaseOf(blob));
+}
+
+test "timebase falls back to the /cpus parent, the older form of the binding" {
+    const blob = comptime buildTestFdt(.{ .name = "", .children = &.{
+        .{
+            .name = "cpus",
+            .props = &.{.{ .name = "timebase-frequency", .value = &hz10m }},
+            .children = &.{.{ .name = "cpu@0" }},
+        },
+    } });
+    try std.testing.expectEqual(@as(?u64, 10_000_000), try timebaseOf(blob));
+}
+
+test "a cpu node's timebase overrides the /cpus default" {
+    const blob = comptime buildTestFdt(.{ .name = "", .children = &.{
+        .{
+            .name = "cpus",
+            .props = &.{.{ .name = "timebase-frequency", .value = &hz10m }},
+            .children = &.{
+                .{ .name = "cpu@0", .props = &.{.{ .name = "timebase-frequency", .value = &hz20m }} },
+            },
+        },
+    } });
+    try std.testing.expectEqual(@as(?u64, 20_000_000), try timebaseOf(blob));
+}
+
+test "a tree that declares no timebase reports null, never a default" {
+    const blob = comptime buildTestFdt(.{ .name = "", .children = &.{
+        .{ .name = "cpus", .children = &.{.{ .name = "cpu@0" }} },
+    } });
+    try std.testing.expectEqual(@as(?u64, null), try timebaseOf(blob));
+}
+
+test "regression: a CLINT with no clock-frequency still leaves the timebase readable" {
+    // The delta_v1 tree shape that hid the defect. The CLINT declares no clock
+    // of its own, so a timer-device clock lookup finds nothing. The hart's
+    // timebase is on the cpu node, and that is the value a consumer needs.
+    const blob = comptime buildTestFdt(.{
+        .name = "",
+        .children = &.{
+            .{
+                .name = "cpus",
+                .children = &.{
+                    .{
+                        .name = "cpu@0",
+                        .props = &.{
+                            .{ .name = "compatible", .value = "riscv\x00" },
+                            .{ .name = "clock-frequency", .value = &hz20m },
+                            .{ .name = "timebase-frequency", .value = &hz20m },
+                        },
+                        // A cpu's local interrupt controller sits one level deeper. Its
+                        // properties must not be read as the cpu's own.
+                        .children = &.{.{ .name = "interrupt-controller", .props = &.{
+                            .{ .name = "compatible", .value = "riscv,cpu-intc\x00" },
+                        } }},
+                    },
+                },
+            },
+            .{ .name = "soc", .children = &.{
+                .{ .name = "clint0@2000000", .props = &.{
+                    .{ .name = "compatible", .value = "riscv,clint0\x00" },
+                } },
+            } },
+        },
+    });
+    try std.testing.expectEqual(@as(?u64, 20_000_000), try timebaseOf(blob));
+}
+
+test "a backend with no timebaseHz method reports null rather than guessing" {
+    const NoTimebase = struct {
+        pub fn reset(_: *@This()) void {}
+        pub fn next(_: *@This()) backend.Error!?backend.Node {
+            return null;
+        }
+        pub fn resources(_: *@This(), _: backend.Node, _: *resource.List) backend.Error!void {}
+    };
+    var impl = NoTimebase{};
+    const any = backend.fromImpl(&impl);
+    try std.testing.expectEqual(@as(?u64, null), try any.timebaseHz());
 }

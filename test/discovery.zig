@@ -68,3 +68,23 @@ test "comptime: Builder bakes the uart base into a constant" {
     }
     try std.testing.expectEqual(@as(u64, 0x1000_0000), found.?);
 }
+
+test "runtime: the architectural timebase comes from the tree, not from a timer device" {
+    var reader = try dtree.Reader.initBuffer(&blob);
+    var be = dt.DtBackend.init(&reader);
+    const reg = discover.Registry.init(be.any(), &matchers);
+
+    // QEMU virt puts `timebase-frequency` on the /cpus parent, the older form of
+    // the RISC-V binding, and runs mtime at 10 MHz.
+    try std.testing.expectEqual(@as(?u64, 10_000_000), try reg.timebaseHz());
+}
+
+test "comptime: Builder bakes the architectural timebase into a constant" {
+    const baked = comptime blk: {
+        @setEvalBranchQuota(20_000_000);
+        var reader = dtree.Reader.initBuffer(&blob) catch unreachable;
+        var be = dt.DtBackend.init(&reader);
+        break :blk discover.Builder.timebaseHz(&be);
+    };
+    try std.testing.expectEqual(@as(?u64, 10_000_000), baked);
+}
